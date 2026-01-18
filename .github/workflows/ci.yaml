@@ -9,19 +9,70 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # 🔴 REQUIRED to push images
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.23'
+          cache: true
+
       - name: Install dependencies
         run: go mod download
+
       - name: Run tests
         run: go test ./...
+
       - name: Build static binary
         run: CGO_ENABLED=0 GOOS=linux go build -ldflags "-s -w" -o bin/gateway ./cmd/gateway
+
       - name: Build Docker image
         if: github.event_name != 'pull_request'
+        run: docker build --pull -t api-gateway:${{ github.sha }} .
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
         run: |
-          docker build --pull -t api-gateway:${{ github.sha }} .
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push Docker image
+        if: github.event_name != 'pull_request'
+        run: |
+          IMAGE=ghcr.io/${{ github.repository }}/api-gateway
+          docker tag api-gateway:${{ github.sha }} $IMAGE:${{ github.sha }}
+          docker tag api-gateway:${{ github.sha }} $IMAGE:latest
+          docker push $IMAGE:${{ github.sha }}
+          docker push $IMAGE:latest
+
+# name: CI
+
+# on:
+#   push:
+#     branches: [ main ]
+#   pull_request:
+#     branches: [ main ]
+
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - name: Set up Go
+#         uses: actions/setup-go@v4
+#         with:
+#           go-version: '1.23'
+#       - name: Install dependencies
+#         run: go mod download
+#       - name: Run tests
+#         run: go test ./...
+#       - name: Build static binary
+#         run: CGO_ENABLED=0 GOOS=linux go build -ldflags "-s -w" -o bin/gateway ./cmd/gateway
+#       - name: Build Docker image
+#         if: github.event_name != 'pull_request'
+#         run: |
+#           docker build --pull -t api-gateway:${{ github.sha }} .

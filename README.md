@@ -6,17 +6,24 @@
 
 This gateway acts as a reverse proxy with pluggable rate-limiting algorithms. It's designed for high concurrency, low latency, and seamless scalability across multiple instances via Redis.
 
-**Key Features:**
+**Core Features:**
 - Reverse proxy with transparent request forwarding
 - Distributed rate limiting via Redis with atomic operations
 - Multiple rate-limiting algorithms (Token Bucket, Sliding Window)
 - Per-key, per-endpoint, and per-IP rate limit policies
+- JWT authentication (HMAC & JWKS/RS256)
 - Structured JSON logging with request IDs and latency metrics
 - Prometheus metrics for QPS, latency, and rate-limit violations
 - Graceful shutdown (SIGTERM/SIGINT with context cancellation)
 - Clean Architecture (domain, service, repository, handler, middleware)
 - Full test coverage for concurrency and correctness
 - Docker & Kubernetes ready
+
+**Advanced Features (New):**
+- 🔐 **RBAC** - Role-Based Access Control with wildcard path matching
+- 🔑 **API Keys** - Alternative auth with path/rate-limit per key
+- ⚡ **Response Caching** - TTL-based caching with LRU eviction
+- 🔄 **Circuit Breakers** - Prevent cascading failures with auto-recovery
 
 ---
 
@@ -112,6 +119,66 @@ kubectl apply -f k8s/hpa.yaml
 
 ---
 
+## Advanced Features
+
+### RBAC (Role-Based Access Control)
+Fine-grained access control with wildcard path matching. Define permissions per role:
+
+```go
+rbac := middleware.NewRBACMiddleware(map[string][]string{
+    "admin":    {"/admin/*", "/api/*"},
+    "operator": {"/admin/policies", "/api/*"},
+    "user":     {"/api/*"},
+})
+```
+
+See [docs/FEATURES.md](docs/FEATURES.md#rbac) for detailed RBAC guide.
+
+### API Keys
+Alternative authentication with path and rate-limit per key:
+
+```bash
+# Request with API key
+curl -H "X-API-Key: key_user_prod_456" http://localhost:8080/api/users
+
+# Per-key rate limiting
+key_admin_prod_123   → 10K RPS, admin role
+key_user_prod_456    → 1K RPS, user role
+```
+
+See [docs/FEATURES.md](docs/FEATURES.md#api-keys) for API key management.
+
+### Response Caching
+TTL-based response cache with LRU eviction:
+
+```go
+cache := service.NewResponseCache(1000, 10*1024*1024)
+cachedTransport := service.NewCachedRoundTripper(cache)
+
+client := &http.Client{Transport: cachedTransport}
+resp, _ := client.Do(request)
+// Subsequent requests served from cache
+```
+
+See [docs/FEATURES.md](docs/FEATURES.md#response-caching) for caching strategies.
+
+### Circuit Breakers
+Prevent cascading failures with automatic recovery:
+
+```go
+pool := service.NewCircuitBreakerPool(5, 3, 30*time.Second)
+breaker := pool.Get("downstream-api")
+
+err := breaker.Call(func() error {
+    return callDownstream()
+})
+// Circuit opens after 5 failures, reopens after 3 successes
+```
+
+See [docs/FEATURES.md](docs/FEATURES.md#circuit-breakers) for patterns and monitoring.
+
+---
+
 ## Testing
 
 ```bash
@@ -124,14 +191,25 @@ go test ./... -v
 # Run specific package tests
 go test ./internal/service -v
 go test ./internal/repository -v
+go test ./internal/middleware -v
 
 # Run benchmarks
 go test -bench=. ./...
+
+# Test new features
+go test -run RBAC ./internal/middleware
+go test -run APIKey ./internal/middleware
+go test -run Cache ./internal/service
+go test -run CircuitBreaker ./internal/service
 ```
 
 **Test Coverage:**
 - **Token Bucket**: Concurrency tests (20+ goroutines), capacity limits, refill logic
 - **Sliding Window**: Time-windowed event counting, cleanup
+- **RBAC**: Role permission validation, wildcard matching, path access control
+- **API Keys**: Key validation, path restrictions, rate limits
+- **Caching**: TTL expiration, LRU eviction, cache key generation
+- **Circuit Breakers**: State transitions, failure/success counting, recovery
 - **Multi-key isolation**: Ensure per-key quotas are independent
 - **In-memory store**: Mutex safety, timestamp tracking
 - **Rate-limit middleware**: Extraction of API keys and IP addresses

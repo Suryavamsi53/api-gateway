@@ -1,0 +1,975 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>downstream: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">api-gateway/cmd/downstream/main.go (0.0%)</option>
+				
+				<option value="file1">api-gateway/cmd/gateway/main.go (0.0%)</option>
+				
+				<option value="file2">api-gateway/internal/config/config.go (0.0%)</option>
+				
+				<option value="file3">api-gateway/internal/handler/admin.go (0.0%)</option>
+				
+				<option value="file4">api-gateway/internal/handler/health.go (0.0%)</option>
+				
+				<option value="file5">api-gateway/internal/handler/proxy.go (0.0%)</option>
+				
+				<option value="file6">api-gateway/internal/metrics/metrics.go (0.0%)</option>
+				
+				<option value="file7">api-gateway/internal/middleware/limits.go (0.0%)</option>
+				
+				<option value="file8">api-gateway/internal/middleware/logging.go (0.0%)</option>
+				
+				<option value="file9">api-gateway/internal/middleware/ratelimit.go (0.0%)</option>
+				
+				<option value="file10">api-gateway/internal/middleware/requestid.go (0.0%)</option>
+				
+				<option value="file11">api-gateway/internal/repository/memory.go (96.9%)</option>
+				
+				<option value="file12">api-gateway/internal/repository/redis.go (76.7%)</option>
+				
+				<option value="file13">api-gateway/internal/service/limiter.go (80.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "fmt"
+        "log"
+        "net/http"
+        "time"
+)
+
+// Simple downstream service for testing the gateway.
+func main() <span class="cov0" title="0">{
+        http.HandleFunc("/api/users", handleUsers)
+        http.HandleFunc("/api/orders", handleOrders)
+        http.HandleFunc("/health", handleHealth)
+
+        log.Println("Downstream service listening on :8081")
+        if err := http.ListenAndServe(":8081", nil); err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("server failed: %v", err)
+        }</span>
+}
+
+func handleUsers(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        // Simulate processing time
+        time.Sleep(50 * time.Millisecond)
+        w.Header().Set("Content-Type", "application/json")
+        fmt.Fprintf(w, `{"users":[{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]}`)
+}</span>
+
+func handleOrders(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        // Simulate slow endpoint
+        time.Sleep(200 * time.Millisecond)
+        w.Header().Set("Content-Type", "application/json")
+        fmt.Fprintf(w, `{"orders":[{"id":101,"status":"pending"}]}`)
+}</span>
+
+func handleHealth(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        fmt.Fprintf(w, `{"status":"healthy"}`)
+}</span>
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package main
+
+import (
+        "context"
+        "net/http"
+        "os"
+        "os/signal"
+        "syscall"
+        "time"
+
+        "api-gateway/internal/config"
+        "api-gateway/internal/handler"
+        "api-gateway/internal/metrics"
+        "api-gateway/internal/middleware"
+        "api-gateway/internal/repository"
+        "api-gateway/internal/service"
+
+        "github.com/rs/zerolog"
+        "github.com/rs/zerolog/log"
+)
+
+func main() <span class="cov0" title="0">{
+        cfg := config.Load()
+
+        zerolog.TimeFieldFormat = time.RFC3339Nano
+
+        // storage
+        var store repository.Store
+        if cfg.RedisAddr != "" </span><span class="cov0" title="0">{
+                r, err := repository.NewRedisStore(cfg.RedisAddr)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Fatal().Err(err).Msg("failed to connect redis")
+                }</span>
+                <span class="cov0" title="0">store = r</span>
+        } else<span class="cov0" title="0"> {
+                store = repository.NewMemoryStore()
+        }</span>
+
+        // services
+        <span class="cov0" title="0">limSvc := service.NewLimiter(store)
+
+        // metrics
+        metricsRegistry := metrics.NewRegistry()
+
+        // policy store
+        policyStore := config.NewPolicyStore()
+
+        // handler
+        proxy := handler.NewProxyHandler(cfg.DownstreamURL, limSvc, metricsRegistry)
+        health := &amp;handler.HealthHandler{}
+        admin := handler.NewAdminHandler(policyStore)
+
+        mux := http.NewServeMux()
+        mux.Handle("/metrics", metricsRegistry.Handler())
+        mux.Handle("/admin/policies", admin)
+        mux.HandleFunc("/health", health.Liveness)
+        mux.HandleFunc("/ready", health.Readiness)
+        mux.HandleFunc("/status", health.Status)
+        mux.Handle("/", proxy)
+
+        // middleware chain
+        h := middleware.RequestID(mux)
+        h = middleware.Logging(h)
+        h = middleware.RateLimit(limSvc, metricsRegistry, policyStore)(h)
+        h = middleware.RequestSizeLimit(middleware.MaxRequestSize)(h)
+
+        srv := &amp;http.Server{Addr: cfg.ListenAddr, Handler: h}
+
+        go func() </span><span class="cov0" title="0">{
+                log.Info().Msgf("listening %s", cfg.ListenAddr)
+                if err := srv.ListenAndServe(); err != nil &amp;&amp; err != http.ErrServerClosed </span><span class="cov0" title="0">{
+                        log.Fatal().Err(err).Msg("server failed")
+                }</span>
+        }()
+
+        <span class="cov0" title="0">quit := make(chan os.Signal, 1)
+        signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+        &lt;-quit
+        log.Info().Msg("shutting down")
+
+        ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.GracefulShutdownTimeout)*time.Second)
+        defer cancel()
+        if err := srv.Shutdown(ctx); err != nil </span><span class="cov0" title="0">{
+                log.Fatal().Err(err).Msg("server shutdown failed")
+        }</span>
+        <span class="cov0" title="0">log.Info().Msg("server exited")</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package config
+
+import (
+        "os"
+        "strconv"
+        "sync"
+)
+
+// PolicyConfig specifies rate limit policy for an endpoint or key.
+type PolicyConfig struct {
+        Algorithm string
+        Capacity  int64
+        Rate      float64
+        WindowMs  int64
+        Limit     int64
+}
+
+// PolicyStore loads and retrieves policies (in production, backed by DB or config service).
+type PolicyStore interface {
+        GetPolicy(key string) PolicyConfig
+        SetPolicy(key string, p PolicyConfig)
+        ListPolicies() map[string]PolicyConfig
+}
+
+// staticPolicies is a simple in-memory policy store (in production use dynamic backend).
+type dynamicPolicyStore struct {
+        mu       sync.RWMutex
+        policies map[string]PolicyConfig
+}
+
+func (d *dynamicPolicyStore) GetPolicy(key string) PolicyConfig <span class="cov0" title="0">{
+        d.mu.RLock()
+        defer d.mu.RUnlock()
+        if p, ok := d.policies[key]; ok </span><span class="cov0" title="0">{
+                return p
+        }</span>
+        <span class="cov0" title="0">return PolicyConfig{Algorithm: "tokenbucket", Capacity: 100, Rate: 100, Limit: 100}</span>
+}
+
+func (d *dynamicPolicyStore) SetPolicy(key string, p PolicyConfig) <span class="cov0" title="0">{
+        d.mu.Lock()
+        defer d.mu.Unlock()
+        if d.policies == nil </span><span class="cov0" title="0">{
+                d.policies = make(map[string]PolicyConfig)
+        }</span>
+        <span class="cov0" title="0">d.policies[key] = p</span>
+}
+
+func (d *dynamicPolicyStore) ListPolicies() map[string]PolicyConfig <span class="cov0" title="0">{
+        d.mu.RLock()
+        defer d.mu.RUnlock()
+        out := make(map[string]PolicyConfig, len(d.policies))
+        for k, v := range d.policies </span><span class="cov0" title="0">{
+                out[k] = v
+        }</span>
+        <span class="cov0" title="0">return out</span>
+}
+
+// NewPolicyStore returns a dynamic in-memory policy store pre-populated with defaults.
+func NewPolicyStore() PolicyStore <span class="cov0" title="0">{
+        d := &amp;dynamicPolicyStore{policies: make(map[string]PolicyConfig)}
+        d.policies["api-key:premium"] = PolicyConfig{Algorithm: "tokenbucket", Capacity: 1000, Rate: 1000}
+        d.policies["api-key:standard"] = PolicyConfig{Algorithm: "tokenbucket", Capacity: 100, Rate: 100}
+        d.policies["endpoint:/api/expensive"] = PolicyConfig{Algorithm: "slidingwindow", WindowMs: 1000, Limit: 10}
+        return d
+}</span>
+
+// Config holds configuration loaded from environment variables.
+type Config struct {
+        RedisAddr               string
+        DownstreamURL           string
+        ListenAddr              string
+        GracefulShutdownTimeout int
+}
+
+// Load reads environment variables and returns a Config with sensible defaults.
+func Load() Config <span class="cov0" title="0">{
+        cfg := Config{
+                RedisAddr:     os.Getenv("REDIS_ADDR"),
+                DownstreamURL: os.Getenv("DOWNSTREAM_URL"),
+                ListenAddr:    os.Getenv("LISTEN_ADDR"),
+        }
+        if cfg.ListenAddr == "" </span><span class="cov0" title="0">{
+                cfg.ListenAddr = ":8080"
+        }</span>
+        <span class="cov0" title="0">if cfg.DownstreamURL == "" </span><span class="cov0" title="0">{
+                cfg.DownstreamURL = "http://localhost:8081"
+        }</span>
+        <span class="cov0" title="0">timeout := os.Getenv("GRACEFUL_SHUTDOWN_TIMEOUT")
+        if timeout != "" </span><span class="cov0" title="0">{
+                if t, err := strconv.Atoi(timeout); err == nil </span><span class="cov0" title="0">{
+                        cfg.GracefulShutdownTimeout = t
+                }</span>
+        }
+        <span class="cov0" title="0">if cfg.GracefulShutdownTimeout == 0 </span><span class="cov0" title="0">{
+                cfg.GracefulShutdownTimeout = 15
+        }</span>
+        <span class="cov0" title="0">return cfg</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package handler
+
+import (
+        "encoding/json"
+        "net/http"
+
+        "api-gateway/internal/config"
+)
+
+// AdminHandler provides simple endpoints to manage rate-limit policies at runtime.
+type AdminHandler struct {
+        store config.PolicyStore
+}
+
+func NewAdminHandler(s config.PolicyStore) *AdminHandler <span class="cov0" title="0">{
+        return &amp;AdminHandler{store: s}
+}</span>
+
+// ServeHTTP dispatches on method: GET lists policies, POST upserts a policy.
+func (a *AdminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        switch r.Method </span>{
+        case http.MethodGet:<span class="cov0" title="0">
+                policies := a.store.ListPolicies()
+                json.NewEncoder(w).Encode(policies)</span>
+        case http.MethodPost:<span class="cov0" title="0">
+                var payload struct {
+                        Key    string              `json:"key"`
+                        Policy config.PolicyConfig `json:"policy"`
+                }
+                if err := json.NewDecoder(r.Body).Decode(&amp;payload); err != nil </span><span class="cov0" title="0">{
+                        http.Error(w, "invalid payload", http.StatusBadRequest)
+                        return
+                }</span>
+                <span class="cov0" title="0">a.store.SetPolicy(payload.Key, payload.Policy)
+                w.WriteHeader(http.StatusNoContent)</span>
+        default:<span class="cov0" title="0">
+                http.Error(w, "method not allowed", http.StatusMethodNotAllowed)</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package handler
+
+import (
+        "encoding/json"
+        "net/http"
+        "time"
+)
+
+// HealthHandler handles health check requests.
+type HealthHandler struct{}
+
+// LivenessResponse represents liveness probe response.
+type LivenessResponse struct {
+        Status string `json:"status"`
+        Time   int64  `json:"timestamp"`
+}
+
+// ReadinessResponse represents readiness probe response.
+type ReadinessResponse struct {
+        Status string `json:"status"`
+        Redis  string `json:"redis"`
+}
+
+// Liveness returns 200 if the service is running.
+func (h *HealthHandler) Liveness(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(LivenessResponse{
+                Status: "alive",
+                Time:   time.Now().Unix(),
+        })
+}</span>
+
+// Readiness returns 200 if the service is ready to serve traffic.
+// In production, check Redis connectivity, database, etc.
+func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        redisStatus := "ok"
+        // In production, perform actual health check on Redis
+        json.NewEncoder(w).Encode(ReadinessResponse{
+                Status: "ready",
+                Redis:  redisStatus,
+        })
+}</span>
+
+// Status returns detailed status information.
+func (h *HealthHandler) Status(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        status := map[string]interface{}{
+                "service":   "api-gateway",
+                "version":   "1.0.0",
+                "timestamp": time.Now().Unix(),
+                "uptime":    time.Since(startTime).Seconds(),
+        }
+        json.NewEncoder(w).Encode(status)
+}</span>
+
+var startTime = time.Now()
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package handler
+
+import (
+        "net/http"
+        "net/http/httputil"
+        "net/url"
+
+        "api-gateway/internal/metrics"
+        "api-gateway/internal/service"
+)
+
+// ProxyHandler forwards requests to a downstream service after rate-limiting.
+type ProxyHandler struct {
+        proxy   *httputil.ReverseProxy
+        limiter *service.Limiter
+        metrics *metrics.Registry
+}
+
+func NewProxyHandler(downstream string, l *service.Limiter, m *metrics.Registry) *ProxyHandler <span class="cov0" title="0">{
+        u, _ := url.Parse(downstream)
+        rp := httputil.NewSingleHostReverseProxy(u)
+        return &amp;ProxyHandler{proxy: rp, limiter: l, metrics: m}
+}</span>
+
+func (p *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        // Proxy directly; rate limiting handled by middleware earlier.
+        // Attach any metrics or headers if needed.
+        ctx := r.Context()
+        _ = ctx
+        p.proxy.ServeHTTP(w, r)
+}</span>
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package metrics
+
+import (
+        "net/http"
+
+        "github.com/prometheus/client_golang/prometheus"
+        "github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+type Registry struct {
+        Requests    prometheus.Counter
+        RateLimited prometheus.Counter
+        // in production you would add histograms for latency and gauges etc.
+}
+
+func NewRegistry() *Registry <span class="cov0" title="0">{
+        r := &amp;Registry{
+                Requests: prometheus.NewCounter(prometheus.CounterOpts{
+                        Name: "gateway_requests_total",
+                        Help: "Total requests received",
+                }),
+                RateLimited: prometheus.NewCounter(prometheus.CounterOpts{
+                        Name: "gateway_rate_limited_total",
+                        Help: "Total rate limited responses",
+                }),
+        }
+        prometheus.MustRegister(r.Requests, r.RateLimited)
+        return r
+}</span>
+
+func (r *Registry) Handler() http.Handler <span class="cov0" title="0">{
+        return promhttp.Handler()
+}</span>
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package middleware
+
+import (
+        "net/http"
+
+        "github.com/rs/zerolog/log"
+)
+
+const (
+        // MaxRequestSize limits request body size to 10MB
+        MaxRequestSize = 10 * 1024 * 1024
+)
+
+// RequestSizeLimit enforces maximum request body size.
+func RequestSizeLimit(maxBytes int64) func(http.Handler) http.Handler <span class="cov0" title="0">{
+        return func(next http.Handler) http.Handler </span><span class="cov0" title="0">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                        if r.ContentLength &gt; maxBytes </span><span class="cov0" title="0">{
+                                log.Warn().
+                                        Int64("content_length", r.ContentLength).
+                                        Int64("max_size", maxBytes).
+                                        Msg("request body too large")
+                                http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+                                return
+                        }</span>
+                        <span class="cov0" title="0">r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+                        next.ServeHTTP(w, r)</span>
+                })
+        }
+}
+
+// CircuitBreakerState tracks circuit breaker state.
+type CircuitBreakerState int
+
+const (
+        Closed CircuitBreakerState = iota
+        Open
+        HalfOpen
+)
+
+// CircuitBreaker implements a simple circuit breaker for downstream errors.
+type CircuitBreaker struct {
+        state           CircuitBreakerState
+        failureCount    int
+        failureThreshold int
+        resetTimeout    int // seconds
+        lastFailureTime  int64
+}
+
+// NewCircuitBreaker creates a new circuit breaker.
+func NewCircuitBreaker(threshold int, resetTimeout int) *CircuitBreaker <span class="cov0" title="0">{
+        return &amp;CircuitBreaker{
+                state:            Closed,
+                failureThreshold: threshold,
+                resetTimeout:     resetTimeout,
+        }
+}</span>
+
+// RecordSuccess resets the circuit breaker.
+func (cb *CircuitBreaker) RecordSuccess() <span class="cov0" title="0">{
+        cb.state = Closed
+        cb.failureCount = 0
+}</span>
+
+// RecordFailure increments failure count and trips the circuit if threshold exceeded.
+func (cb *CircuitBreaker) RecordFailure() bool <span class="cov0" title="0">{
+        cb.failureCount++
+        if cb.failureCount &gt;= cb.failureThreshold </span><span class="cov0" title="0">{
+                cb.state = Open
+                return true
+        }</span>
+        <span class="cov0" title="0">return false</span>
+}
+
+// IsOpen returns whether the circuit is open.
+func (cb *CircuitBreaker) IsOpen() bool <span class="cov0" title="0">{
+        return cb.state == Open
+}</span>
+
+// Middleware wraps a handler with circuit breaker protection.
+func (cb *CircuitBreaker) Middleware(next http.Handler) http.Handler <span class="cov0" title="0">{
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                if cb.IsOpen() </span><span class="cov0" title="0">{
+                        log.Warn().Msg("circuit breaker open")
+                        http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+                        return
+                }</span>
+                <span class="cov0" title="0">next.ServeHTTP(w, r)</span>
+        })
+}
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package middleware
+
+import (
+        "net/http"
+        "time"
+
+        "github.com/rs/zerolog/log"
+)
+
+// Logging is a middleware that logs requests as structured JSON including request id and latency.
+func Logging(next http.Handler) http.Handler <span class="cov0" title="0">{
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                start := time.Now()
+                next.ServeHTTP(w, r)
+                dur := time.Since(start)
+                log.Info().Str("method", r.Method).
+                        Str("path", r.URL.Path).
+                        Str("request_id", r.Header.Get("X-Request-ID")).
+                        Dur("latency", dur).
+                        Msg("request completed")
+        }</span>)
+}
+</pre>
+		
+		<pre class="file" id="file9" style="display: none">package middleware
+
+import (
+        "context"
+        "encoding/json"
+        "net"
+        "net/http"
+        "strconv"
+        "strings"
+        "time"
+
+        "api-gateway/internal/config"
+        "api-gateway/internal/metrics"
+        "api-gateway/internal/service"
+
+        "github.com/rs/zerolog/log"
+)
+
+// RateLimit builds a middleware using the given limiter service and policy store.
+func RateLimit(l *service.Limiter, m *metrics.Registry, ps config.PolicyStore) func(http.Handler) http.Handler <span class="cov0" title="0">{
+        return func(next http.Handler) http.Handler </span><span class="cov0" title="0">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                        key := r.Header.Get("X-API-Key")
+                        if key == "" </span><span class="cov0" title="0">{
+                                key = clientIP(r)
+                        }</span>
+                        <span class="cov0" title="0">lookup := strings.Join([]string{key, r.URL.Path}, ":")
+
+                        // lookup policy
+                        pc := ps.GetPolicy(lookup)
+                        // map to service.Policy
+                        p := service.Policy{
+                                Algorithm: service.AlgorithmType(pc.Algorithm),
+                                Capacity:  pc.Capacity,
+                                Rate:      pc.Rate,
+                                WindowMs:  pc.WindowMs,
+                                Limit:     pc.Limit,
+                        }
+
+                        ctx, cancel := context.WithTimeout(r.Context(), 50*time.Millisecond)
+                        defer cancel()
+                        allowed, remaining, err := l.Allow(ctx, lookup, p)
+                        if err != nil </span><span class="cov0" title="0">{
+                                log.Error().Err(err).Msg("rate limit evaluation error")
+                                http.Error(w, "internal", http.StatusInternalServerError)
+                                return
+                        }</span>
+
+                        // attach rate-limit headers
+                        <span class="cov0" title="0">w.Header().Set("X-RateLimit-Limit", strconv.FormatInt(p.Capacity, 10))
+                        w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remaining, 10))
+                        w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(1*time.Second).Unix(), 10))
+
+                        m.Requests.Inc()
+                        if !allowed </span><span class="cov0" title="0">{
+                                m.RateLimited.Inc()
+                                w.Header().Set("Retry-After", "1")
+                                w.WriteHeader(http.StatusTooManyRequests)
+                                json.NewEncoder(w).Encode(map[string]interface{}{
+                                        "error":      "rate_limited",
+                                        "message":    "rate limit exceeded",
+                                        "request_id": r.Header.Get("X-Request-ID"),
+                                })
+                                return
+                        }</span>
+                        <span class="cov0" title="0">next.ServeHTTP(w, r)</span>
+                })
+        }
+}
+
+// clientIP attempts to extract the remote IP address.
+func clientIP(r *http.Request) string <span class="cov0" title="0">{
+        if xff := r.Header.Get("X-Forwarded-For"); xff != "" </span><span class="cov0" title="0">{
+                parts := strings.Split(xff, ",")
+                return strings.TrimSpace(parts[0])
+        }</span>
+        <span class="cov0" title="0">host, _, err := net.SplitHostPort(r.RemoteAddr)
+        if err != nil </span><span class="cov0" title="0">{
+                return r.RemoteAddr
+        }</span>
+        <span class="cov0" title="0">return host</span>
+}
+</pre>
+		
+		<pre class="file" id="file10" style="display: none">package middleware
+
+import (
+        "net/http"
+
+        "github.com/google/uuid"
+)
+
+// RequestID sets a unique request ID on each incoming request in header X-Request-ID
+func RequestID(next http.Handler) http.Handler <span class="cov0" title="0">{
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                id := r.Header.Get("X-Request-ID")
+                if id == "" </span><span class="cov0" title="0">{
+                        id = uuid.New().String()
+                        r.Header.Set("X-Request-ID", id)
+                }</span>
+                <span class="cov0" title="0">w.Header().Set("X-Request-ID", id)
+                next.ServeHTTP(w, r)</span>
+        })
+}
+</pre>
+		
+		<pre class="file" id="file11" style="display: none">package repository
+
+import (
+        "context"
+        "sync"
+        "time"
+)
+
+type memBucket struct {
+        tokens int64
+        last   int64
+}
+
+type memoryStore struct {
+        mu      sync.Mutex
+        buckets map[string]*memBucket
+        sw      map[string][]int64
+}
+
+// NewMemoryStore returns an in-memory Store for local development/testing.
+func NewMemoryStore() Store <span class="cov8" title="1">{
+        return &amp;memoryStore{
+                buckets: make(map[string]*memBucket),
+                sw:      make(map[string][]int64),
+        }
+}</span>
+
+func (m *memoryStore) TokenBucket(ctx context.Context, key string, capacity int64, refillRate float64, tokens int64) (bool, int64, error) <span class="cov8" title="1">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+        now := time.Now().UnixNano() / int64(time.Millisecond)
+        b, ok := m.buckets[key]
+        if !ok </span><span class="cov8" title="1">{
+                b = &amp;memBucket{tokens: capacity, last: now}
+                m.buckets[key] = b
+        }</span>
+        <span class="cov8" title="1">delta := now - b.last
+        refill := int64(float64(delta) * (refillRate / 1000.0))
+        if refill &gt; 0 </span><span class="cov8" title="1">{
+                b.tokens += refill
+                if b.tokens &gt; capacity </span><span class="cov0" title="0">{
+                        b.tokens = capacity
+                }</span>
+                <span class="cov8" title="1">b.last = now</span>
+        }
+        <span class="cov8" title="1">if b.tokens &gt;= tokens </span><span class="cov8" title="1">{
+                b.tokens -= tokens
+                return true, b.tokens, nil
+        }</span>
+        <span class="cov8" title="1">return false, b.tokens, nil</span>
+}
+
+func (m *memoryStore) SlidingWindow(ctx context.Context, key string, windowMillis int64) (int64, error) <span class="cov8" title="1">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+        now := time.Now().UnixNano() / int64(time.Millisecond)
+        arr := m.sw[key]
+        cutoff := now - windowMillis
+        // remove old
+        i := 0
+        for ; i &lt; len(arr); i++ </span><span class="cov8" title="1">{
+                if arr[i] &gt;= cutoff </span><span class="cov8" title="1">{
+                        break</span>
+                }
+        }
+        <span class="cov8" title="1">arr = arr[i:]
+        arr = append(arr, now)
+        m.sw[key] = arr
+        return int64(len(arr)), nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file12" style="display: none">package repository
+
+import (
+        "context"
+        "fmt"
+        "time"
+
+        "github.com/redis/go-redis/v9"
+)
+
+type redisStore struct {
+        client *redis.Client
+}
+
+// NewRedisStore connects to Redis and returns a Store implementation.
+func NewRedisStore(addr string) (Store, error) <span class="cov8" title="1">{
+        opt := &amp;redis.Options{
+                Addr: addr,
+        }
+        client := redis.NewClient(opt)
+        if err := client.Ping(context.Background()).Err(); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("redis ping: %w", err)
+        }</span>
+        <span class="cov8" title="1">return &amp;redisStore{client: client}, nil</span>
+}
+
+// tokenBucketLua implements refill + take atomically.
+var tokenBucketLua = redis.NewScript(`
+local key = KEYS[1]
+local capacity = tonumber(ARGV[1])
+local rate = tonumber(ARGV[2])
+local now = tonumber(ARGV[3])
+local requested = tonumber(ARGV[4])
+
+local data = redis.call('HMGET', key, 'tokens', 'last')
+local tokens = tonumber(data[1]) or capacity
+local last = tonumber(data[2]) or now
+
+local delta = math.max(0, now - last)
+local refill = delta * rate
+tokens = math.min(capacity, tokens + refill)
+local allowed = 0
+if tokens &gt;= requested then
+  tokens = tokens - requested
+  allowed = 1
+end
+redis.call('HMSET', key, 'tokens', tokens, 'last', now)
+redis.call('PEXPIRE', key, math.ceil((capacity / rate) * 1000 * 2))
+return {allowed, tokens}
+`)
+
+func (r *redisStore) TokenBucket(ctx context.Context, key string, capacity int64, refillRate float64, tokens int64) (bool, int64, error) <span class="cov8" title="1">{
+        now := time.Now().UnixNano() / int64(time.Millisecond)
+        res, err := tokenBucketLua.Run(ctx, r.client, []string{key}, capacity, refillRate/1000.0, now, tokens).Result()
+        if err != nil </span><span class="cov0" title="0">{
+                return false, 0, err
+        }</span>
+        <span class="cov8" title="1">arr, ok := res.([]interface{})
+        if !ok || len(arr) &lt; 2 </span><span class="cov0" title="0">{
+                return false, 0, fmt.Errorf("unexpected redis response: %v", res)
+        }</span>
+        <span class="cov8" title="1">allowed := arr[0].(int64) == 1
+        remaining := int64(0)
+        switch v := arr[1].(type) </span>{
+        case int64:<span class="cov8" title="1">
+                remaining = v</span>
+        case string:<span class="cov0" title="0">
+                // redis may return string
+                var parsed int64
+                fmt.Sscanf(v, "%d", &amp;parsed)
+                remaining = parsed</span>
+        }
+        <span class="cov8" title="1">return allowed, remaining, nil</span>
+}
+
+func (r *redisStore) SlidingWindow(ctx context.Context, key string, windowMillis int64) (int64, error) <span class="cov8" title="1">{
+        now := time.Now().UnixNano() / int64(time.Millisecond)
+        zkey := key + ":sw"
+        pipe := r.client.TxPipeline()
+        pipe.ZAdd(ctx, zkey, redis.Z{Score: float64(now), Member: now})
+        pipe.ZRemRangeByScore(ctx, zkey, "-inf", fmt.Sprintf("%d", now-windowMillis))
+        cnt := pipe.ZCard(ctx, zkey)
+        pipe.PExpire(ctx, zkey, time.Duration(windowMillis*2)*time.Millisecond)
+        if _, err := pipe.Exec(ctx); err != nil </span><span class="cov0" title="0">{
+                return 0, err
+        }</span>
+        <span class="cov8" title="1">return cnt.Val(), nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file13" style="display: none">package service
+
+import (
+        "context"
+        "fmt"
+
+        "api-gateway/internal/repository"
+)
+
+// AlgorithmType enumerates supported algorithms.
+type AlgorithmType string
+
+const (
+        TokenBucketAlg   AlgorithmType = "tokenbucket"
+        SlidingWindowAlg AlgorithmType = "slidingwindow"
+)
+
+// Policy describes a rate limit policy.
+type Policy struct {
+        Algorithm AlgorithmType
+        Capacity  int64
+        Rate      float64 // tokens per second for token bucket
+        WindowMs  int64   // window size for sliding window, milliseconds
+        Limit     int64   // limit for sliding window
+}
+
+// Limiter provides rate-limiting evaluation.
+type Limiter struct {
+        store repository.Store
+}
+
+// NewLimiter constructs a Limiter.
+func NewLimiter(s repository.Store) *Limiter <span class="cov8" title="1">{
+        return &amp;Limiter{store: s}
+}</span>
+
+// Allow evaluates whether an event identified by key is allowed.
+// It returns allowed and remaining quota (where applicable).
+func (l *Limiter) Allow(ctx context.Context, key string, p Policy) (bool, int64, error) <span class="cov8" title="1">{
+        switch p.Algorithm </span>{
+        case TokenBucketAlg:<span class="cov8" title="1">
+                // tokens requested = 1
+                allowed, remaining, err := l.store.TokenBucket(ctx, "tb:"+key, p.Capacity, p.Rate, 1)
+                if err != nil </span><span class="cov0" title="0">{
+                        return false, 0, err
+                }</span>
+                <span class="cov8" title="1">return allowed, remaining, nil</span>
+        case SlidingWindowAlg:<span class="cov8" title="1">
+                count, err := l.store.SlidingWindow(ctx, "sw:"+key, p.WindowMs)
+                if err != nil </span><span class="cov0" title="0">{
+                        return false, 0, err
+                }</span>
+                <span class="cov8" title="1">allowed := count &lt;= p.Limit
+                remaining := p.Limit - count
+                if remaining &lt; 0 </span><span class="cov8" title="1">{
+                        remaining = 0
+                }</span>
+                <span class="cov8" title="1">return allowed, remaining, nil</span>
+        default:<span class="cov0" title="0">
+                return false, 0, fmt.Errorf("unknown algorithm %s", p.Algorithm)</span>
+        }
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

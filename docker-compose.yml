@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  gateway:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      LISTEN_ADDR: ":8080"
+      DOWNSTREAM_URL: "http://downstream:8081"
+      REDIS_ADDR: "redis:6379"
+      GRACEFUL_SHUTDOWN_TIMEOUT: "15"
+    depends_on:
+      redis:
+        condition: service_healthy
+      downstream:
+        condition: service_started
+
+  downstream:
+    build:
+      context: .
+      dockerfile: Dockerfile.downstream
+    ports:
+      - "8081:8081"

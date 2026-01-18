@@ -6,7 +6,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 
 # Install git
-RUN apt-get update && apt-get install -y git ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache git ca-certificates
 
 # Download dependencies
 RUN go mod download
@@ -19,6 +19,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags='-s -w' -o /gateway ./cmd/gateway
 
 # Use distroless image for smaller final image
 FROM gcr.io/distroless/static:nonroot
+
 COPY --from=build /gateway /gateway
+
 EXPOSE 8080
+USER nonroot:nonroot
 ENTRYPOINT ["/gateway"]

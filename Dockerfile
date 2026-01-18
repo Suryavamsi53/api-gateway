@@ -1,4 +1,5 @@
-FROM golang:1.23 AS build
+FROM golang:1.23-alpine AS build
+
 WORKDIR /src
 
 # Copy go.mod and go.sum first for better docker cache
